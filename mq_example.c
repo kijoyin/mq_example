@@ -24,23 +24,19 @@
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/rfcomm.h>
 
-#define MY_MQ_NAME "/my_mq"
 #define CAR_SPEED "/car_speed"
 #define CAR_CMD "/car_cmd"
 
-pthread_t thread1;
-pthread_t thread2;
+
 pthread_t calculateSpeed;
 pthread_t receiveCarCmd;
 
 static struct mq_attr my_mq_attr;
-static mqd_t my_mq, car_mq, car_cmd;
+static mqd_t car_mq, car_cmd;
 
 static unsigned int counter;
 static float speedKmPerHour;
 
-void thread1_main(void);
-void thread2_main(void);
 void calculateSpeed_main(void);
 void receiveCarCmd_main(void);
 
@@ -52,14 +48,13 @@ void sig_handler(int signum) {
 
     printf("Received SIGINT. Exiting Application\n");
 
-    pthread_cancel(thread1);
-    pthread_cancel(thread2);
     pthread_cancel(calculateSpeed);
+    pthread_cancel(receiveCarCmd);
 
-    mq_close(my_mq);
     mq_close(car_mq);
-    mq_unlink(MY_MQ_NAME);
+    mq_close(car_cmd);
     mq_unlink(CAR_SPEED);
+    mq_unlink(CAR_CMD);
 
     exit(0);
 }
@@ -75,10 +70,7 @@ int main(void) {
     my_mq_attr.mq_maxmsg = 10;
     my_mq_attr.mq_msgsize = sizeof(counter);
 
-    my_mq = mq_open(MY_MQ_NAME, \
-                    O_CREAT | O_RDWR | O_NONBLOCK, \
-                    0666, \
-                    &my_mq_attr);
+
     car_mq = mq_open(CAR_SPEED, \
                     O_CREAT | O_RDWR | O_NONBLOCK, \
                     0666, \
@@ -88,26 +80,12 @@ int main(void) {
                     0666, \
                     &my_mq_attr);
 
-    ASSERT(my_mq != -1);
     ASSERT(car_mq != -1);
     ASSERT(car_cmd != -1);
 
     pthread_attr_init(&attr);
     pthread_attr_setstacksize(&attr, 1024*1024);
    
-    printf("Creating thread1\n");
-    status = pthread_create(&thread1, &attr, (void*)&thread1_main, NULL);
-    if (status != 0) {
-        printf("Failed to create thread1 with status = %d\n", status);
-        ASSERT(status == 0);
-    }    
-
-    printf("Creating thread2\n");
-    status = pthread_create(&thread2, &attr, (void*)&thread2_main, NULL);
-    if (status != 0) {
-        printf("Failed to create thread2 with status = %d\n", status);
-        ASSERT(status == 0);
-    }  
     
     printf("Creating car thread\n");
     status = pthread_create(&calculateSpeed, &attr, (void*)&calculateSpeed_main, NULL);
@@ -123,30 +101,12 @@ int main(void) {
         ASSERT(status == 0);
     }    
 
-    pthread_join(thread1, NULL);
-    pthread_join(thread2, NULL);
     pthread_join(calculateSpeed, NULL);
     pthread_join(receiveCarCmd, NULL);
 
     sig_handler(SIGINT);
     
     return 0;
-}
-
-void thread1_main(void) {
-    unsigned int exec_period_usecs;
-    int status;
-
-    exec_period_usecs = 1000000; /*in micro-seconds*/
-
-    printf("Thread 1 started. Execution period = %d uSecs\n",\
-                                           exec_period_usecs);
-    while(1) {
-        status = mq_send(my_mq, (const char*)&counter, sizeof(counter), 1);
-        status = mq_send(car_mq, (const char*)&counter, sizeof(counter), 1);
-        ASSERT(status != -1);
-        usleep(exec_period_usecs);
-    }
 }
 
 void receiveCarCmd_main(void) {
@@ -213,30 +173,6 @@ void calculateSpeed_main(void) {
 
         if (status > 0) {
             printf("RECVd MSG in Car: %d\n", recv_counter);
-        }
- 
-        usleep(exec_period_usecs);
-    }
-}
-
-
-void thread2_main(void) {
-    unsigned int exec_period_usecs;
-    int status;
-    int recv_counter;
-
-    exec_period_usecs = 10000; /*in micro-seconds*/
-
-    printf("Thread 2 started. Execution period = %d uSecs\n",\
-                                           exec_period_usecs);
-
-    while(1) {
-        status = mq_receive(my_mq, (char*)&recv_counter, \
-                            sizeof(recv_counter), NULL);
-
-        if (status > 0) {
-            printf("RECVd MSG in THRD_2: %d\n", recv_counter);
-            counter += 1;
         }
  
         usleep(exec_period_usecs);
