@@ -117,40 +117,36 @@ void receiveCarCmd_main(void) {
 
     printf("Car cmd started started. Execution period = %d uSecs\n",\
                                            exec_period_usecs);
-    struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
-    char buf[1024] = { 0 };
-    int s, client, bytes_read;
-    socklen_t opt = sizeof(rem_addr);
+    int sock, client, alen;
+  struct sockaddr_rc addr;
 
-    // allocate socket
-    s = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
-
-    // bind socket to port 1 of the first available 
-    // local bluetooth adapter
-    loc_addr.rc_family = AF_BLUETOOTH;
-    loc_addr.rc_bdaddr = *BDADDR_ANY;
-    loc_addr.rc_channel = (uint8_t) 1;
-    bind(s, (struct sockaddr *)&loc_addr, sizeof(loc_addr));
-
-    // put socket into listening mode
-    listen(s, 1);
-
-    // accept one connection
-    client = accept(s, (struct sockaddr *)&rem_addr, &opt);
-
-    ba2str( &rem_addr.rc_bdaddr, buf );
-    fprintf(stderr, "accepted connection from %s\n", buf);
-    memset(buf, 0, sizeof(buf));
-
-    // read data from the client
-    bytes_read = read(client, buf, sizeof(buf));
-    if( bytes_read > 0 ) {
-        printf("received [%s]\n", buf);
+  if( (sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM)) < 0)
+    {
+      perror("socket");
+      exit(1);
     }
 
-    // close connection
-    close(client);
-    close(s);
+  addr.rc_family = AF_BLUETOOTH;
+  bacpy(&addr.rc_bdaddr, BDADDR_ANY);
+  addr.rc_channel = htobs(CHANNEL);
+  alen = sizeof(addr);
+
+  if(bind(sock, (struct sockaddr *)&addr, alen) < 0)
+    {
+      perror("bind");
+      exit(1);
+    }
+
+  listen(sock,QUEUE);
+  printf("Waiting for connections...\n\n");  
+
+  while(client = accept(sock, (struct sockaddr *)&addr, &alen))
+    {
+      printf("Got a connection attempt!\n");
+      close(client);
+    }
+
+  close(sock);
     while(1) {
         status = mq_send(car_cmd, (const char*)&counter, sizeof(counter), 1);
         ASSERT(status != -1);
