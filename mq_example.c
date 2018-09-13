@@ -162,16 +162,14 @@ void receiveCarCmd_main(void) {
     int s, client, bytes_read;
     socklen_t opt = sizeof(rem_addr);
 
-    printf("usage: %s <bt-port> \n", argv[0]);
-
     // allocate socket
     s = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
 
-    // bind socket to port of the first available 
+    // bind socket to port 1 of the first available 
     // local bluetooth adapter
     loc_addr.rc_family = AF_BLUETOOTH;
     loc_addr.rc_bdaddr = *BDADDR_ANY;
-    loc_addr.rc_channel = (uint8_t) atoi(argv[1]);
+    loc_addr.rc_channel = (uint8_t) 1;
     bind(s, (struct sockaddr *)&loc_addr, sizeof(loc_addr));
 
     // put socket into listening mode
