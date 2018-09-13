@@ -152,7 +152,7 @@ void receiveCarCmd_main(void) {
     close(client);
     close(s);
     while(1) {
-        status = mq_send(my_mq, (const char*)&counter, sizeof(counter), 1);
+        status = mq_send(car_cmd, (const char*)&counter, sizeof(counter), 1);
         ASSERT(status != -1);
         usleep(exec_period_usecs);
     }
