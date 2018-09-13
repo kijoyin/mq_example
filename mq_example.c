@@ -26,6 +26,9 @@
 
 #define CAR_SPEED "/car_speed"
 #define CAR_CMD "/car_cmd"
+#define CHANNEL 4
+#define QUEUE 10
+
 
 
 pthread_t calculateSpeed;
@@ -117,36 +120,48 @@ void receiveCarCmd_main(void) {
 
     printf("Car cmd started started. Execution period = %d uSecs\n",\
                                            exec_period_usecs);
-    int sock, client, alen;
-  struct sockaddr_rc addr;
+    struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
+    char buf[1024] = { 0 };
+    int s, client, bytes_read;
+    socklen_t opt = sizeof(rem_addr);
 
-  if( (sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM)) < 0)
+    // allocate socket
+    s = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+
+    // bind socket to port 1 of the first available 
+    // local bluetooth adapter
+    loc_addr.rc_family = AF_BLUETOOTH;
+    loc_addr.rc_bdaddr = *BDADDR_ANY;
+    loc_addr.rc_channel = (uint8_t) 1;
+    if(bind(s, (struct sockaddr *)&loc_addr, sizeof(loc_addr)) < 0)
     {
-      perror("socket");
-      exit(1);
-    }
+		perror("bind");
+        exit(1);
+	}
 
-  addr.rc_family = AF_BLUETOOTH;
-  bacpy(&addr.rc_bdaddr, BDADDR_ANY);
-  addr.rc_channel = htobs(CHANNEL);
-  alen = sizeof(addr);
+    // put socket into listening mode
+    listen(s, 1);
 
-  if(bind(sock, (struct sockaddr *)&addr, alen) < 0)
-    {
-      perror("bind");
-      exit(1);
-    }
-
-  listen(sock,QUEUE);
-  printf("Waiting for connections...\n\n");  
-
-  while(client = accept(sock, (struct sockaddr *)&addr, &alen))
+    // accept one connection
+    printf("Waiting for connection!\n");
+    while(client = accept(s, (struct sockaddr *)&rem_addr, &opt))
     {
       printf("Got a connection attempt!\n");
-      close(client);
     }
 
-  close(sock);
+    ba2str( &rem_addr.rc_bdaddr, buf );
+    fprintf(stderr, "accepted connection from %s\n", buf);
+    memset(buf, 0, sizeof(buf));
+
+    // read data from the client
+    bytes_read = read(client, buf, sizeof(buf));
+    if( bytes_read > 0 ) {
+        printf("received [%s]\n", buf);
+    }
+
+    // close connection
+    close(client);
+    close(s);
     while(1) {
         status = mq_send(car_cmd, (const char*)&counter, sizeof(counter), 1);
         ASSERT(status != -1);
