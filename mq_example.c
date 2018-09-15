@@ -125,6 +125,7 @@ void receiveCarCmd_main(void) {
 
     printf("Car cmd started started. Execution period = %d uSecs\n",\
                                            exec_period_usecs);
+    init_server();
     while(1) {
         status = mq_send(car_cmd, (const char*)&counter, sizeof(counter), 1);
         ASSERT(status != -1);
@@ -141,7 +142,6 @@ void calculateSpeed_main(void) {
 
     printf("Car thread started. Execution period = %d uSecs\n",\
                                            exec_period_usecs);
-    init_server();
     while(1) {
         status = mq_receive(car_mq, (char*)&recv_counter, \
                             sizeof(recv_counter), NULL);
@@ -154,7 +154,7 @@ void calculateSpeed_main(void) {
     }
 }
 sdp_session_t *register_service() {
-
+    
 	uint32_t service_uuid_int[] = { 0, 0, 0, 0xABCD };
     uint8_t rfcomm_channel = 11;
     const char *service_name = "Roto-Rooter Data Router";
@@ -199,11 +199,16 @@ sdp_session_t *register_service() {
     // set the name, provider, and description
     sdp_set_info_attr(record, service_name, service_prov, service_dsc);
     int err = 0;
-    sdp_session_t *session = 0;
-
+    sdp_session_t *session = (sdp_session_t*)malloc(sizeof(sdp_session_t));
+    printf("Value: %p\n", session );
     // connect to the local SDP server, register the service record, and 
     // disconnect
+    // https://raspberrypi.stackexchange.com/questions/41776/failed-to-connect-to-sdp-server-on-ffffff000000-no-such-file-or-directory
+    // run this sudo chmod 777 /var/run/sdp
     session = sdp_connect( BDADDR_ANY, BDADDR_LOCAL, SDP_RETRY_IF_BUSY );
+    printf("Value: %d\n", *session );
+    printf("Value: %p\n", session );
+    printf("Value: %p\n", &session );
     err = sdp_record_register(session, record, 0);
 
     // cleanup
@@ -229,7 +234,7 @@ int init_server() {
 	loc_addr.rc_channel = (uint8_t) port;
 
 	// register service
-	sdp_session_t *session = register_service();
+	sdp_session_t* session = register_service();
 
 	// allocate socket
 	sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
